@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>티링크 Voice-Fit 생성기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet">
+<style>
+/* VOICE: 영업 담당자의 접수함 콘솔. 차분, 빠르게 읽힘
+   IDEA: 상담신청서 한 장 + 통화 한 통이 그 회사 전용 제안 꾸러미로 바뀌는 작업대
+   PICTURE: 접수함과 신청서 자체, 결과의 발송 타임라인과 견적표
+   COLOUR and TYPE: 티링크 홈페이지 톤. 밝은 회색 바탕, 네이비 #1b2350, 인디고 포인트 #5465d6. Noto Sans KR + Space Grotesk 숫자
+   LAYOUT: 지식베이스 띠 → 접수함|신청 상세 2열 → 전체 폭 결과 → 사진 DB */
+:root{color-scheme:light dark;--bg:light-dark(#f5f6fa,#0f1326);--ink:light-dark(#1b2350,#e8ebf7);--mute:light-dark(#5d6480,#9aa2c2);--line:light-dark(#e3e6ef,#2a3152);--card:light-dark(#ffffff,#181d36);--field:light-dark(#f5f6fa,#11152b);--mint:light-dark(#e9ecfc,#26306a);--mintink:light-dark(#1b2350,#dfe4ff);--acc:light-dark(#5465d6,#8b98f0);--navy:#1b2350;--navy2:#3d4a80}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "Noto Sans KR",system-ui,sans-serif;overflow-x:clip}
+.band{padding:clamp(24px,4vw,52px) max(5vw,16px)}
+.wrap{max-width:1240px;margin:0 auto}
+header.band{background:linear-gradient(120deg,var(--navy),var(--navy2));color:#fff;padding-bottom:18px}header .lede{opacity:.85}
+h1{font-size:clamp(30px,4.4vw,46px);line-height:1.08;margin:0 0 8px;text-wrap:balance}
+h2{font-size:22px;margin:0 0 12px;color:var(--ink)}h3{font-size:17px;margin:0 0 6px}
+.lede{max-width:66ch;margin:0}
+.wave{display:block;width:100%;height:48px;margin-top:16px}
+.grid{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.6fr);gap:24px}
+@media(max-width:900px){.grid{grid-template-columns:minmax(0,1fr)}}
+.panel{border:1px solid var(--line);border-radius:14px;padding:20px;background:var(--card)}
+label{display:block;font-weight:500;font-size:14px;margin:10px 0 4px}
+input[type=text],input[type=number],select,textarea{width:100%;font:inherit;font-size:16px;color:var(--ink);background:var(--field);border:1px solid var(--line);border-radius:10px;padding:9px 12px;min-height:44px}
+textarea{resize:vertical;min-height:90px}
+:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 14px}
+@media(max-width:560px){.two{grid-template-columns:minmax(0,1fr)}}
+.hint{color:var(--mute);font-size:14px;margin:4px 0 0}.note{font-size:13px;color:var(--mute)}
+.tag{display:inline-block;font-size:13px;padding:1px 8px;border-radius:99px;background:var(--card);border:1px solid var(--line);margin:0 4px 4px 0;white-space:nowrap}
+.tag.on{background:var(--mint);color:var(--mintink);border-color:transparent}
+button{font:inherit;font-weight:700;min-height:44px;padding:10px 18px;border-radius:99px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+button.go{background:var(--navy);border-color:var(--navy);color:#fff;font-size:18px;padding:14px 30px}
+button:disabled{opacity:.5;cursor:wait}
+button.sm{min-height:36px;padding:6px 12px;font-size:14px;font-weight:500}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.kb{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+@media(max-width:900px){.kb{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}@media(max-width:560px){.kb{grid-template-columns:minmax(0,1fr)}}
+.kbc{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;font-size:14px}.kbc h3{color:var(--navy)}
+.kbc ul{margin:6px 0 0;padding-left:18px}.kbc li{margin:2px 0}
+.kbc .fit{color:var(--mute);margin:6px 0 0}
+.inbox{display:flex;flex-direction:column;gap:8px}
+.lead{flex:none;display:block;width:100%;text-align:left;font-weight:400;line-height:1.5;border:1px solid var(--line);background:var(--card);padding:12px 14px;border-radius:12px;min-height:0}
+.lead[aria-pressed=true]{border-color:var(--ink);box-shadow:inset 4px 0 0 var(--acc)}
+.lead b{display:block;font-size:16px}
+.calc{background:var(--card);border-radius:10px;padding:10px 12px;font-size:14px}
+.drop{border:2px dashed var(--line);border-radius:12px;padding:14px;text-align:center;color:var(--mute);font-size:14px}
+.drop.on{border-color:var(--acc)}
+.thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}.thumbs img{width:84px;height:64px;object-fit:cover;border-radius:8px}
+.status{margin:12px 0 0;color:var(--mute);min-height:1.6em}
+.prof{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:20px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px}
+@media(max-width:700px){.prof{grid-template-columns:minmax(0,1fr)}}
+.big{font-family:"Space Grotesk",sans-serif;font-size:44px;line-height:1;color:var(--acc)}
+.quote{border-left:3px solid var(--mint);padding:2px 0 2px 12px;margin:8px 0;color:var(--mute)}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px}
+@media(max-width:800px){.cols{grid-template-columns:minmax(0,1fr)}}
+table.q{width:100%;border-collapse:collapse;font-size:15px}
+table.q td,table.q th{padding:8px 4px;border-bottom:1px solid var(--line);text-align:left}
+table.q td.n,table.q th.n{text-align:right;font-family:"Space Grotesk",sans-serif;white-space:nowrap}
+table.q tfoot td{font-weight:700;border-bottom:0}
+.sol{display:grid;grid-template-columns:88px minmax(0,1fr);gap:12px;align-items:start;padding:12px 0;border-bottom:1px solid var(--line)}.sol .tag{justify-self:start;margin:2px 0 0;text-align:center}
+.sol:last-child{border-bottom:0}
+.tl{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin-top:8px}
+@media(max-width:800px){.tl{grid-template-columns:minmax(0,1fr)}}
+.st{padding:16px 16px 16px 0;border-top:4px solid var(--navy)}
+.st:nth-child(2){border-top-color:var(--acc)}.st:nth-child(3){border-top-color:var(--acc)}.st:nth-child(4){border-top-color:var(--navy2)}
+.st .when{font-family:"Space Grotesk",sans-serif;font-size:20px;white-space:nowrap}
+.pains{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+@media(max-width:860px){.pains{grid-template-columns:minmax(0,1fr)}}
+.pain{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px}
+.pain .k{font-family:"Space Grotesk",sans-serif;font-size:28px;line-height:1;color:var(--acc)}
+.photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
+.ph{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--card);font-size:13px}
+.ph img,.ph .ni{display:block;width:100%;aspect-ratio:4/3;object-fit:cover}
+.ph .ni{display:grid;place-items:center;background:var(--mint);color:var(--mintink);font-weight:700;font-size:15px;text-align:center;padding:10px}
+.ph .meta{padding:8px 10px}
+.tabs{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 14px}
+.tabs button[aria-selected=true]{background:var(--navy);border-color:var(--navy);color:#fff}
+.out{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;white-space:pre-wrap;max-width:80ch}
+.phone{max-width:360px;background:var(--card);border-radius:22px;padding:16px;border:1px solid var(--line)}
+.phone .bub{background:var(--mint);color:var(--mintink);border-radius:16px 16px 16px 4px;padding:12px 14px;white-space:pre-wrap;font-size:15px}.phone img{margin:0 0 8px}
+.phone img{width:100%;border-radius:12px;margin-top:8px;display:block}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.cn{aspect-ratio:1;border-radius:12px;padding:18px;display:flex;flex-direction:column;justify-content:space-between;background:var(--mint);color:var(--mintink)}
+
+.cn b{font-size:20px;line-height:1.25}.cn span{font-size:14px}
+#results[hidden]{display:none}
+.offer{max-width:640px;border-radius:18px;overflow:hidden;border:1px solid var(--line);background:var(--card)}
+.offer .hero{background:linear-gradient(120deg,var(--navy),var(--navy2));color:#fff;padding:26px 24px}
+.offer .hero q{display:block;font-size:clamp(24px,4vw,32px);font-weight:700;line-height:1.25;quotes:"“" "”"}
+.offer .hero p{margin:10px 0 0;opacity:.8}
+.offer img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover}
+.offer .ba{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.offer .ba div{padding:18px 20px}.offer .ba .b{background:var(--field)}.offer .ba .a{background:var(--mint);color:var(--mintink)}
+.offer .ba small{display:block;font-weight:700;font-size:13px;margin-bottom:4px}
+.offer .chips{display:flex;flex-wrap:wrap;gap:8px;padding:18px 20px 0}
+.offer .chip{border:1px solid var(--line);border-radius:99px;padding:4px 12px;font-weight:700;font-size:14px}
+.offer .price{padding:16px 20px 0}.offer .price b{font-family:"Space Grotesk",sans-serif;font-size:30px}
+.offer .cta{display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:18px 20px 22px}
+.offer .cta span.btn{background:var(--navy);color:#fff;border-radius:99px;padding:10px 20px;font-weight:700}
+.co{display:flex;flex-direction:column;gap:2px;padding:16px 20px;border-top:1px solid var(--line);font-size:14px}.co b{font-size:15px}
+.dday{max-width:520px;border-radius:18px;background:linear-gradient(120deg,var(--navy),var(--navy2));color:#fff;padding:26px 24px}
+.dday .n{font-family:"Space Grotesk",sans-serif;font-size:64px;line-height:1}
+.dday h3{font-size:26px;line-height:1.25;margin:12px 0 6px}
+.dday .btn{display:inline-block;margin-top:14px;background:#fff;color:var(--navy);border-radius:99px;padding:10px 20px;font-weight:700}
+.cards .cn{position:relative;overflow:hidden}
+.cn.k-hook{background:linear-gradient(140deg,var(--navy),var(--navy2));color:#fff}.cn.k-pain{background:var(--card);color:var(--ink);border:1px solid var(--line)}
+.cn.k-solution{background:#000 center/cover;color:#fff}.cn.k-solution::before{content:"";position:absolute;inset:0;background:linear-gradient(transparent 30%,rgba(0,0,0,.8))}
+.cn.k-solution>*{position:relative}.cn.k-proof{background:var(--mint);color:var(--mintink)}.cn.k-cta{background:var(--acc);color:#fff}
+.cn b{font-size:23px;line-height:1.3;display:block}.cn ul{margin:10px 0 0;padding-left:18px;font-size:14px;line-height:1.55}.cn li{margin:2px 0}.cn .stat{font-family:'Space Grotesk',sans-serif;font-size:56px;line-height:1}.cn .statl{font-size:13px;opacity:.8;margin:2px 0 10px}.cn .cinfo{margin-top:12px;font-size:13px;opacity:.9;line-height:1.5}.cn.k-reframe{background:var(--card);color:var(--ink);border:1px solid var(--line)}
+.case{display:grid;grid-template-columns:120px minmax(0,1fr);gap:14px;align-items:center;padding:18px 20px 0}.case img{width:120px;height:120px;object-fit:cover;border-radius:12px}.case small{display:block;color:var(--mute);font-size:13px}.case b{display:block}.case span{font-size:14px;color:var(--mute)}.cn .num{font-family:"Space Grotesk",sans-serif;font-size:13px;opacity:.7}
+details>summary{cursor:pointer;font-weight:500}
+@media(prefers-reduced-motion:no-preference){.wave rect{animation:w 1.6s ease-in-out infinite alternate;transform-origin:center;transform-box:fill-box}@keyframes w{to{transform:scaleY(.55)}}}
+</style>
+</head>
+<body>
+<header class="band"><div class="wrap">
+<h1>상담을 신청한 그 회사만을 위한 홍보물</h1>
+<p class="lede">상담신청서와 문의 통화 녹취, 고객이 보낸 사무실 사진을 AI가 함께 읽습니다. 티링크 6개 솔루션 중 맞는 구성과 설치 형태, 예상 견적을 정리하고, 같은 업종의 설치 현장 사진을 넣은 문자·제안 메일·후속 메일·카드뉴스를 만듭니다.</p>
+<svg class="wave" viewBox="0 0 600 48" preserveAspectRatio="none" aria-hidden="true" id="wave"></svg>
+</div></header>
+
+
+
+<section class="band" style="padding-top:44px;padding-bottom:8px"><div class="wrap">
+<h2>데이터 연결</h2>
+<div class="two">
+<div class="panel"><label for="xfile" style="margin-top:0">상담 DB 엑셀</label><input type="file" id="xfile" accept=".xlsx,.xls">
+<p class="note" id="xinfo">상담접수·솔루션정보·폭주시기·사진목록 시트를 읽습니다. 솔루션정보는 화면에 따로 보여 주지 않고, AI가 홍보물을 쓸 때 근거로만 씁니다.</p></div>
+<div class="panel"><label for="pfile" style="margin-top:0">설치 현장 사진 폴더</label><input type="file" id="pfile" accept="image/*" multiple>
+<p class="note" id="pinfo">사진 폴더를 열고 사진을 모두 선택(Ctrl+A)하세요. 엑셀 "사진목록"의 파일명과 맞춰 분야·설치 형태를 붙입니다.</p></div>
+</div>
+<p class="note">파일은 이 브라우저 안에서만 읽고 어디에도 올리지 않습니다. 홍보물을 만들 때 고른 접수 한 건과 사진 목록(글자)만 AI에 보냅니다.</p>
+</div></section>
+
+<main class="band"><div class="wrap">
+<div class="grid">
+<section class="panel">
+<h2>접수함</h2>
+<div class="two" style="margin-bottom:8px"><div><label for="q">검색</label><input type="text" id="q" placeholder="회사명·문의 내용"></div><div><label for="fsec">분야</label><select id="fsec"><option value="">전체</option></select></div></div>
+<div class="inbox" id="inbox" style="max-height:560px;overflow:auto"></div>
+</section>
+
+<section class="panel" id="detail"></section>
+</div>
+
+<div class="row" style="margin-top:24px">
+<button class="go" id="run" type="button">이 고객 맞춤 홍보물 만들기</button>
+<button id="stop" type="button" hidden>중지</button>
+</div>
+<p class="status" id="runStatus"></p>
+</div></main>
+
+<section class="band" id="results" hidden style="border-top:1px solid var(--line)"><div class="wrap">
+<h2>고객 진단</h2>
+<div class="prof" id="prof"></div>
+
+<div class="cols" style="margin-top:28px">
+<div><h2>맞는 솔루션</h2><div id="sols"></div></div>
+<div><h2>추천 구성과 예상 견적</h2><div id="quote"></div></div>
+</div>
+
+<h2 style="margin-top:32px">설치 형태</h2>
+<div id="install"></div>
+
+<h2 style="margin-top:32px">발송 타임라인</h2>
+<div class="tl" id="tl"></div>
+
+<h2 style="margin-top:32px">이 고객의 핵심 고민 3가지</h2>
+<div class="pains" id="pains"></div>
+
+<h2 style="margin-top:32px">같은 업종의 설치 현장</h2>
+<div class="photos" id="recs"></div>
+
+<h2 style="margin-top:32px">발송물</h2>
+<div class="tabs" role="tablist" id="tabs">
+<button role="tab" data-t="sms" aria-selected="true">접수 1분 뒤 문자</button>
+<button role="tab" data-t="prop" aria-selected="false">1장 제안서</button>
+<button role="tab" data-t="cards" aria-selected="false">SNS 카드뉴스</button>
+</div>
+<div id="tabBody"></div>
+<p class="note" style="margin-top:16px">AI 초안입니다. 담당자가 확인한 뒤 보내세요. 견적은 홈페이지 간편 견적 기준 예시 금액(VAT 별도)이며, 홍보성 문자·메일은 수신 동의를 확인해야 합니다.</p>
+</div></section>
+
+
+
+<script>
+{
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const won=n=>n.toLocaleString('ko-KR')+'원';
+const SECT=['공공·복지','금융','교육','의료','기업'];
+const SOLN=['티링크 비즈 (콜센터)','티링크 AI 녹취','티링크 고객관리 (CRM)','티링크 모바일 / PC폰','티링크 온 (동시통역 무전기)','IT / 네트워크'];
+
+let KB=[
+{name:SOLN[0],one:'인·아웃바운드 상담, IVR, 콜백, 녹취를 한 화면에서 운영하는 콜센터 솔루션',feat:['실시간 상담 현황판(상담사 접속·대기 콜)','대기 길어지면 콜백 예약으로 이탈 감소','IVR: 070 번호당 동시 4콜, LG·SK·KT·삼성SDS 센트릭스 연동, 키폰 포함 모든 전화 형태','사무실 인터넷전화·재택 PC폰·외근 스마트폰 모두 연결'],proof:['상담원 5인 미만 소기업부터 1,000석 이상까지','IVR 사용처: 클라란스 코리아, 인천도시가스'],fit:'대표번호로 문의가 몰리는 곳, 상담원 3명 이상 고객센터',price:'IVR 월 2만(설정 5만) · 콜백 월 2만(설정 5만) · A타입 상담원당 월 3만 / B 2만 / C 1만(설정 30만, 최소 3명) · 종합리포트 월 10만(A타입)'},
+{name:SOLN[1],one:'기존 회선·전화기를 그대로 두고 모든 통화를 녹음하고 AI가 글로 바꿔 요약',feat:['라우터+패킷 미러링 스위치 방식이라 통화 품질 영향 없음','STT 텍스트 변환·통화 요약, 회의 요약(한줄요약·안건·결정·조치)','고객·상담원 키워드 워드클라우드, 반복 민원 유형 분석','본지사 VPN 통합 녹취, 상담원별 통계 엑셀'],proof:['인터넷전화 녹취 성공률 99%','최대 3,000석 구축(한국전력), 전국 학교 150곳 이상','AES256 녹취파일 암호화, SHA256 비밀번호 보호','설치 형태 3종: 스탠드형·렉거치형·미러링스위치허브'],fit:'민원·분쟁 증빙이 필요한 곳, 통화 기록을 남겨야 하는 곳',price:'C타입(녹취) 상담원당 월 1만, 설정 30만'},
+{name:SOLN[2],one:'통화와 고객 이력을 묶어 관리하고, 상담 데이터를 경영 리포트로 바꾸는 CRM',feat:['전화가 오면 CRM 고객 정보 팝업','상담·주문·민원 이력 관리, 통화 내역 자동 CRM 연동과 후속 알림','AI 종합리포트: 경영 대시보드·상담원 역량 분석·인사고과·신입 교육자료'],proof:['리포트 예시: 주간 상담 115건 중 신규 영업기회 6건 자동 추출'],fit:'영업기회 관리, 상담 품질·인사 평가 근거가 필요한 곳',price:'B타입(고객관리+녹취) 상담원당 월 2만, A타입은 STT 요약·일일보고서 포함 월 3만'},
+{name:SOLN[3],one:'스마트폰(010)과 PC를 회사 전화·CRM·녹취 서버에 연결',feat:['휴대폰 통화 녹취파일 중앙 서버 전송, STT 자동요약','명함 사진 등록, CRM 연동(휴대폰으로 걸기·받기)','대면 녹취, 단체 문자(일 150건)','재택은 PC폰, 외근은 스마트폰'],proof:['보험대리점 스마트폰 70대 도입 예시: 월 1,771,412원 절감','010 발신으로 TM 통화성공률 향상'],fit:'외근 영업사원, 재택 상담원, 010 TM이 필요한 곳',price:'1 USER 월 2만 원(10 USER 초과 협의), 안드로이드 10 이상(아이폰 불가)'},
+{name:SOLN[4],one:'LTE·Wi-Fi 기반 업무용 무전기, 30개국 이상 AI 실시간 통역 선택',feat:['거리 제한 없는 PTT 그룹·1:1 통화','음성+사진 작업보고, SOS 긴급알림','무전·통역 내용 자동 기록·요약','소형 무전기·러기드폰·앱 3종'],proof:['2026.6.24 검수 합격: STT 94.65%, 4개 언어 번역 적합률 98% 이상'],fit:'외국인 근로자가 있는 건설·제조·물류, 병원·호텔 외국인 응대, 행사·시설관리',price:'구독형(세팅비+월 사용료) 또는 구축형, 규모별 견적'},
+{name:SOLN[5],one:'기업전용 인터넷·인터넷전화·대표번호와 PC·네트워크 유지보수',feat:['기업전용 광랜 100M~1G, PC 수 무제한','고정 IP, 사무실 랜공사 지원','인터넷전화, 전국대표번호','LG U+·SKB·KT 요금 비교 제안'],proof:['100M 기업광랜 월 2.5만, 500M 3.5만, 1G 4만부터(VAT 별도)'],fit:'통신을 한 업체로 묶고 싶은 곳, 이전·신규 개설 사무실',price:'통신사·약정별 상이, 설치비 면제(기준 공사비 초과 시 청구)'}];
+
+const INSTALL=[{t:'스탠드형',d:'독립 본체를 사무실 한쪽에 세워 둠. 서버 랙 없이 바로 설치',fit:'서버실이 없는 사무실'},{t:'렉거치형',d:'기존 서버 랙에 녹취 서버 장착. 네트워크 장비와 함께 관리',fit:'전산실·통신 랙이 있는 곳'},{t:'미러링스위치허브',d:'손바닥만 한 미러링 스위치 허브만 추가',fit:'소규모·공간이 좁은 곳'}];
+const INSTALL_CASE='단자함이 좁았던 은평***클럽: 벽 받침대로 녹취 서버를 벽걸이 부착, 단자함에는 미러링 스위치만 넣음';
+
+let CAL=`의료|12|독감·호흡기 유행기 예약 전화 폭주
+의료|3|신학기 검진·예방접종 문의 증가
+교육|3|1학기 학부모 상담 주간
+교육|9|2학기 학부모 상담 주간
+금융|1|연초 금리·상품 문의 집중기
+금융|5|종합소득세 신고철 상담 증가
+공공·복지|1|연초 복지 서비스 신청 집중기
+공공·복지|3|신학기 돌봄·프로그램 신청 문의
+기업|1|신년 영업·조직 개편 시즌
+기업|9|하반기 성수기 준비`;
+
+const now=new Date();const iso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const ago=h=>{const d=new Date(now);d.setHours(d.getHours()-h);return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`};
+const C=(ivr,cb,type,agents,report)=>({ivr,cb,type,agents,report});
+let LEADS=[];
+
+let cur=null,catalog=[],photoRows=[],photoFiles=new Map(),sample=null,imgMax=0,running=null,result=null,tab='sms';
+const lead=()=>LEADS.find(l=>l.id===cur);
+
+{let p='';for(let i=0;i<120;i++){const h=5+Math.abs(Math.sin(i*.37)*Math.cos(i*.11))*38;p+=`<rect x="${i*5}" y="${24-h/2}" width="3" height="${h}" rx="1.5" fill="currentColor" opacity="${(.35+.65*(h/43)).toFixed(2)}"/>`}$('#wave').innerHTML=p}
+
+/* knowledge base */
+function drawKB(){if(!$('#kb'))return;$('#kb').innerHTML=KB.map(k=>`<div class="kbc"><h3>${esc(k.name)}</h3><p style="margin:0">${esc(k.one)}</p>
+<details><summary class="note">기능·근거·가격</summary><ul>${k.feat.map(f=>`<li>${esc(f)}</li>`).join('')}</ul><ul>${k.proof.map(f=>`<li><b>${esc(f)}</b></li>`).join('')}</ul><p class="fit">가격: ${esc(k.price)}</p></details>
+<p class="fit">잘 맞는 고객: ${esc(k.fit)}</p></div>`).join('')}
+drawKB();
+/* quote */
+function quote(c){if(!c)return null;const tp={A:30000,B:20000,C:10000}[c.type]||0;const ag=Math.max(3,+c.agents||0);const rows=[];
+if(c.ivr)rows.push(['IVR 시간대별 안내멘트',20000,50000]);
+if(c.cb)rows.push(['콜백 대기 리스트',20000,50000]);
+if(tp)rows.push([`티링크비즈 ${c.type}타입 × 상담원 ${ag}명`,tp*ag,300000]);
+if(c.report&&c.type==='A')rows.push(['종합리포트(경영분석)',100000,0]);
+if(+c.mobile>0)rows.push([`티링크 모바일 ${+c.mobile} USER${+c.mobile>10?' (10 USER 초과 협의가)':''}`,20000*+c.mobile,0]);
+return{rows,m:rows.reduce((s,r)=>s+r[1],0),s:rows.reduce((s,r)=>s+r[2],0)}}
+const calcText=c=>{if(!c)return'계산기 사용 안 함';const q=quote(c);return `${[c.ivr&&'IVR',c.cb&&'콜백',c.type&&c.type!=='없음'&&c.type+'타입',c.report&&'종합리포트'].filter(Boolean).join(' + ')||'선택 없음'} · 상담원 ${c.agents}명 → 월 ${won(q.m)}, 설정비 ${won(q.s)}`};
+
+/* inbox + detail */
+function drawInbox(){if(!LEADS.length){$('#inbox').innerHTML='<p class="hint">상담 DB 엑셀을 불러오면 접수가 여기에 쌓입니다.</p>';return}const q=$('#q').value.trim(),fs=$('#fsec').value;
+const list=LEADS.filter(l=>(!fs||l.sector===fs)&&(!q||(l.company+' '+l.msg+' '+l.call).includes(q)));
+$('#inbox').innerHTML=(list.length?'':'<p class="hint">조건에 맞는 접수가 없습니다.</p>')+list.map(l=>`<button class="lead" type="button" data-id="${l.id}" aria-pressed="${l.id===cur}"><b>${esc(l.company||'새 접수')}</b>
+<span class="tag">${esc(l.sector)}</span>${l.form?'<span class="tag on">상담신청</span>':''}${l.call?'<span class="tag on">통화 녹취</span>':''}${l.photos?.length?'<span class="tag on">사무실 사진</span>':''}<div class="note">${esc(l.when)}${l.status?' · '+esc(l.status):''}</div></button>`).join('')}
+$('#inbox').addEventListener('click',e=>{const b=e.target.closest('.lead');if(b){cur=b.dataset.id;drawInbox();drawDetail()}});
+
+$('#fsec').innerHTML+=SECT.map(s=>`<option>${s}</option>`).join('');
+$('#q').addEventListener('input',drawInbox);$('#fsec').addEventListener('change',drawInbox);
+const OX=v=>String(v??'').trim().toUpperCase()==='O';
+const cell=(r,k)=>String(r[k]??'').trim();
+$('#xfile').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;
+if(!window.XLSX){$('#xinfo').textContent='엑셀 읽기 도구를 불러오지 못했습니다. 새로고침 후 다시 시도하세요.';return}
+try{const wb=XLSX.read(await f.arrayBuffer());const sh=n=>wb.Sheets[n]?XLSX.utils.sheet_to_json(wb.Sheets[n],{defval:''}):null;
+const leads=sh('상담접수')||sh(wb.SheetNames[0])||[];
+const parsed=leads.filter(r=>cell(r,'회사명')||cell(r,'문의내용')||cell(r,'통화녹취(STT)')).map((r,i)=>{const path=cell(r,'접수경로');const tp=cell(r,'계산기_타입');
+const hasCalc=OX(r['계산기_IVR'])||OX(r['계산기_콜백'])||['A','B','C'].includes(tp);
+return{id:cell(r,'접수ID')||'X'+i,when:cell(r,'접수일시'),form:path.includes('상담신청'),company:cell(r,'회사명'),person:cell(r,'담당자명'),sector:SECT.includes(cell(r,'분야'))?cell(r,'분야'):'기업',
+sol1:cell(r,'관심솔루션1'),sol2:cell(r,'관심솔루션2'),msg:cell(r,'문의내용'),call:cell(r,'통화녹취(STT)'),status:cell(r,'처리상태'),
+calc:hasCalc?C(OX(r['계산기_IVR']),OX(r['계산기_콜백']),['A','B','C'].includes(tp)?tp:'',+r['계산기_상담원수']||3,OX(r['계산기_종합리포트'])):null}});
+if(!parsed.length){$('#xinfo').textContent='"상담접수" 시트에서 접수를 찾지 못했습니다. 첫 줄 제목을 확인하세요.';return}
+LEADS=parsed.sort((a,b)=>b.when.localeCompare(a.when));cur=LEADS[0].id;
+const kb=sh('솔루션정보');let kbn=0;if(kb&&kb.length){const sp=s=>String(s||'').split(/\n|\s\/\s/).map(x=>x.trim()).filter(Boolean);
+KB=kb.filter(r=>cell(r,'솔루션명')).map(r=>({name:cell(r,'솔루션명'),one:cell(r,'한줄소개'),feat:sp(r['주요기능']),proof:sp(r['근거수치']),fit:cell(r,'잘맞는고객'),price:cell(r,'가격')}));kbn=KB.length;drawKB();
+}
+const ph=sh('사진목록');if(ph&&ph.length){photoRows=ph.filter(r=>cell(r,'파일명')).map(r=>({id:cell(r,'사진ID'),file:cell(r,'파일명'),name:cell(r,'회사명')?cell(r,'회사명')+' 설치 사례':'',sector:cell(r,'분야'),install:cell(r,'설치형태'),desc:cell(r,'설명')}));buildCatalog()}
+const cal=sh('폭주시기');if(cal&&cal.length)CAL=cal.filter(r=>cell(r,'분야')&&+r['시작월']).map(r=>`${cell(r,'분야')}|${+r['시작월']}|${cell(r,'시기이름')}`).join('\n');
+$('#xinfo').textContent=`${f.name}: 접수 ${LEADS.length}건${kbn?`, 솔루션 정보 ${kbn}개(AI 근거용)`:''}${cal&&cal.length?`, 폭주시기 ${cal.length}줄`:''}${ph&&ph.length?`, 사진목록 ${ph.length}줄`:''}을 불러왔습니다.`;
+drawInbox();drawDetail()}catch(err){$('#xinfo').textContent='엑셀 파일을 읽지 못했습니다. 형식을 확인하세요.'}});
+function opt(list,v,blank){return (blank?`<option value=""${!v?' selected':''}>${blank}</option>`:'')+list.map(o=>`<option${o===v?' selected':''}>${esc(o)}</option>`).join('')}
+function drawDetail(){const l=lead();if(!l){$('#detail').innerHTML='<h2>접수 상세</h2><p class="hint">상담 DB 엑셀을 불러온 뒤 왼쪽 접수함에서 접수를 고르세요.</p>';return}
+$('#detail').innerHTML=`<h2>${l.form?'상담신청서':'전화 문의'}${l.form&&l.call?' + 통화 녹취':''}</h2>
+<div class="two">
+<div><label for="f-company">회사명</label><input type="text" id="f-company" data-k="company" value="${esc(l.company)}"></div>
+<div><label for="f-person">담당자명</label><input type="text" id="f-person" data-k="person" value="${esc(l.person)}"></div>
+<div><label for="f-sector">분야</label><select id="f-sector" data-k="sector">${opt(SECT,l.sector)}</select></div>
+<div><label for="f-sol1">관심 솔루션 1</label><select id="f-sol1" data-k="sol1">${opt(SOLN,l.sol1,'(전화 문의, 선택 없음)')}</select></div>
+<div><label for="f-sol2">관심 솔루션 2 (선택)</label><select id="f-sol2" data-k="sol2">${opt(SOLN,l.sol2,'선택 안 함')}</select></div>
+<div><label>간편 견적 계산기에서 고른 구성</label><div class="calc">${esc(calcText(l.calc))}</div></div>
+</div>
+<label for="f-msg">문의 내용</label><textarea id="f-msg" data-k="msg" rows="4" placeholder="상담신청서 문의 내용">${esc(l.msg)}</textarea>
+<label for="f-call">통화 녹취 (티링크 AI 녹취 STT)</label><textarea id="f-call" data-k="call" rows="6" placeholder="통화 녹취가 있으면 붙여넣으세요.">${esc(l.call)}</textarea>
+<label>고객이 보낸 사무실 사진 (단자함·전화기·랙 등)</label>
+<div class="drop" id="odrop">사진을 끌어다 놓거나 선택하면 AI가 설치 형태를 판단합니다.<br><input type="file" id="ofile" accept="image/*" multiple style="margin-top:8px"></div>
+<div class="thumbs">${(l.photos||[]).map((p,i)=>`<img src="${p.url}" alt="고객 사무실 사진 ${i+1}">`).join('')}</div>`;
+const od=$('#odrop');
+od.addEventListener('dragover',e=>{e.preventDefault();od.classList.add('on')});od.addEventListener('dragleave',()=>od.classList.remove('on'));
+od.addEventListener('drop',e=>{e.preventDefault();od.classList.remove('on');addOffice(e.dataTransfer.files)});
+$('#ofile').addEventListener('change',e=>addOffice(e.target.files))}
+$('#detail').addEventListener('input',e=>{const k=e.target.dataset.k;if(k&&lead()){lead()[k]=e.target.value;if(k==='company'||k==='sector')drawInbox()}});
+async function addOffice(files){const l=lead();l.photos=l.photos||[];
+for(const f of [...files].filter(f=>f.type.startsWith('image/')).slice(0,4)){try{const bmp=await createImageBitmap(f);const r=Math.min(1,1024/Math.max(bmp.width,bmp.height));const c=document.createElement('canvas');c.width=bmp.width*r|0;c.height=bmp.height*r|0;c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);
+const blob=await new Promise(res=>c.toBlob(res,'image/jpeg',.85));l.photos.push({blob,url:URL.createObjectURL(blob)})}catch(e){}}
+l.photos=l.photos.slice(-4);drawInbox();drawDetail()}
+drawInbox();drawDetail();
+
+/* photo DB */
+const tile=p=>p.src?`<img src="${esc(p.src)}" alt="${esc(p.name)} 설치 현장" loading="lazy">`:`<div class="ni">${esc(p.name)}<br>${esc(p.sector)}</div>`;
+function drawDB(){if(!$('#db'))return;if(!catalog.length){$('#dbInfo').textContent='위 "데이터 연결"에서 엑셀 사진목록과 사진 폴더를 불러오면 여기에 표시됩니다.';$('#db').innerHTML='';return}
+const cnt=SECT.map(s=>`${s} ${catalog.filter(p=>p.sector===s).length}`).join(' · ');
+$('#dbInfo').textContent=`설치 사례 ${catalog.length}장 (${cnt}). 생성할 때는 이 목록의 태그만 AI에 보내고, 고른 사진만 불러옵니다.`;
+$('#db').innerHTML=catalog.map(p=>`<div class="ph">${tile(p)}<div class="meta"><b>${esc(p.id)} ${esc(p.name)}</b><br><span class="tag">${esc(p.sector)}</span>${p.install?`<span class="tag">${esc(p.install)}</span>`:''}<div class="note">${esc(p.desc||'')}</div></div></div>`).join('')}
+const base=s=>String(s||'').normalize('NFC').split(/[\\/]/).pop().trim().toLowerCase();
+function buildCatalog(){const used=new Set();
+catalog=photoRows.map((r,i)=>{const f=photoFiles.get(base(r.file));if(f)used.add(base(r.file));return{id:r.id||'P'+(i+1),name:r.name||r.file,sector:r.sector,install:r.install,desc:r.desc,src:f?f.url:''}});
+let n=catalog.length;for(const [k,f] of photoFiles){if(used.has(k))continue;const sec=SECT.find(s=>k.includes(s.split('·')[0].toLowerCase()))||'';catalog.push({id:'P'+(++n),name:f.name,sector:sec,install:'',desc:'사진목록에 없는 사진',src:f.url})}
+drawDB()}
+$('#pfile').addEventListener('change',e=>{for(const f of [...e.target.files].filter(f=>f.type.startsWith('image/'))){const k=base(f.name);const old=photoFiles.get(k);if(old)URL.revokeObjectURL(old.url);photoFiles.set(k,{name:f.name,url:URL.createObjectURL(f)})}
+const matched=photoRows.filter(r=>photoFiles.has(base(r.file))).length;
+$('#pinfo').textContent=`사진 ${photoFiles.size}장을 불러왔습니다.${photoRows.length?` 사진목록 ${photoRows.length}줄 중 ${matched}장 연결.`:' 엑셀 사진목록을 불러오면 분야·설치 형태가 붙습니다.'}`;buildCatalog()});
+drawDB();
+
+/* timing */
+function nextMoment(sector,from){let best=null;const lim=new Date(from);lim.setDate(lim.getDate()+14);
+for(const ln of CAL.split('\n')){const [s,m,label]=ln.split('|');if(s!==sector)continue;let d=new Date(from.getFullYear(),+m-1,1);if(d<=lim)d=new Date(from.getFullYear()+1,+m-1,1);if(!best||d<best.start){const send=new Date(d);send.setDate(send.getDate()-14);best={label,start:d,send}}}
+return best}
+const md=d=>`${d.getMonth()+1}월 ${d.getDate()}일`;
+
+/* results */
+const CO={name:'㈜티링크앤주인닷컴',tel:'1877-3836',mail:'tlink@tlinkcrm.com',web:'https://www.tlinkcrm.com/',optout:'080-000-0000'};
+const coText=`―――――――――\n${CO.name}\nTEL 대표번호 ${CO.tel}\nE-MAIL ${CO.mail}\n홈페이지 ${CO.web}`;
+const coHTML=()=>`<div class="co"><b>${CO.name}</b><span>TEL 대표번호 ${CO.tel}</span><span>E-MAIL ${CO.mail}</span><span>홈페이지 ${CO.web}</span></div>`;
+function smsText(s){if(typeof s==='string')return `(광고) 티링크\n${s}\n\n${coText}\n무료수신거부 ${CO.optout}`;
+return `(광고) 티링크\n${s.greeting||''}\n\n${s.hook||''}\n\n■ 이렇게 해결해 드립니다\n${(s.product||[]).map(p=>'· '+p).join('\n')}\n\n■ 같은 분야 설치 사례 (사진 첨부)\n${s.case||''}\n\n${s.cta||''}\n\n${coText}\n무료수신거부 ${CO.optout}`}
+const photoById=id=>catalog.find(p=>p.id===id);
+function quoteTable(q,title){if(!q||!q.rows.length)return `<p class="hint">${esc(title)}: 해당 없음</p>`;
+return `<table class="q"><thead><tr><th>${esc(title)}</th><th class="n">월</th><th class="n">설정비</th></tr></thead><tbody>${q.rows.map(r=>`<tr><td>${esc(r[0])}</td><td class="n">${won(r[1])}</td><td class="n">${r[2]?won(r[2]):'-'}</td></tr>`).join('')}</tbody><tfoot><tr><td>합계 (VAT 별도)</td><td class="n">${won(q.m)}</td><td class="n">${won(q.s)}</td></tr></tfoot></table>`}
+const quoteLines=q=>q&&q.rows.length?q.rows.map(r=>`· ${r[0]}: 월 ${won(r[1])}${r[2]?`, 설정비 ${won(r[2])}`:''}`).join('\n')+`\n· 합계: 월 ${won(q.m)}, 최초 설정비 ${won(q.s)} (VAT 별도, 예시 견적)`:'';
+function copyBtn(id){return `<button class="sm" type="button" data-copy="${id}">복사</button>`}
+function drawTab(){if(!result)return;const r=result;let h='';const ph=(r.photos||[]).map(x=>photoById(x.id)).filter(p=>p&&p.src);const first=ph[0];
+if(tab==='sms'){const t=smsText(r.sms||'');h=`<div class="phone">${first?`<img src="${esc(first.src)}" alt="${esc(first.name)}">`:''}<div class="bub" id="c-sms">${esc(t)}</div></div><div class="row" style="margin-top:10px">${copyBtn('c-sms')}<span class="note">MMS · 사진 ${first?1:0}장 + ${[...t].length}자</span></div>`}
+if(tab==='prop'){const o=r.offer||{},q=r._q;const day=q&&q.m?Math.round(q.m/30/100)*100:0;
+h=`<div class="offer" id="c-offer"><div class="hero"><p style="margin:0 0 12px;opacity:.85">${esc(o.greeting||'')}</p><q>${esc(o.hook)}</q><p>${esc(o.sub||'')}</p></div>
+<div class="ba"><div class="b"><small>지금</small>${esc(o.loss)}</div><div class="a"><small>티링크 도입 후</small>${esc(o.after)}</div></div>
+<div class="chips">${(o.proof||[]).slice(0,3).map(p=>`<span class="chip">${esc(p)}</span>`).join('')}</div>
+${r._l?.photos?.length?`<div class="case"><img src="${r._l.photos[0].url}" alt="보내 주신 사무실 사진"><div><small>보내 주신 현장</small><b>${esc(r.install?.type||'')} 형태로 설치 가능</b><span>${esc(r.install?.why||'')}</span></div></div>`:''}${first?`<div class="case"><img src="${esc(first.src)}" alt="${esc(first.sector)} 설치 사례"><div><small>같은 분야 설치 사례</small><b>${esc(first.sector)} · ${esc(first.install||'')}</b><span>${esc(first.desc||'')}</span></div></div>`:''}
+${q&&q.m?`<div class="price"><span class="note">추천 구성 예상 비용</span><br><b>하루 약 ${won(day)}</b> <span class="note">월 ${won(q.m)} · 설정비 ${won(q.s)} · VAT 별도</span></div>`:''}
+${coHTML()}</div>
+<h3 style="margin-top:20px">함께 보낼 메일</h3><div class="out" id="c-prop"><b>제목: ${esc(o.mail_subject)}</b>\n\n${esc(o.mail_body)}\n\n${esc(coText)}</div><div class="row" style="margin-top:8px">${copyBtn('c-prop')}</div>`}
+if(tab==='cards'){const cs=(r.cards||[]).slice(0,6);h=`<div class="cards">${cs.map((c,i)=>{const k=['hook','pain','reframe','solution','proof','cta'].includes(c.kind)?c.kind:'reframe';const bg=k==='solution'&&first?` style="background-image:url('${first.src}')"`:'';
+const body=(Array.isArray(c.body)?c.body:[c.body||c.sub||'']).filter(Boolean);
+return `<div class="cn k-${k}"${bg}><span class="num">${i+1} / ${cs.length}</span><div>${c.stat?`<div class="stat">${esc(c.stat)}</div><div class="statl">${esc(c.statLabel||'')}</div>`:''}<b>${esc(c.head)}</b><ul>${body.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>${k==='cta'?`<div class="cinfo">TEL ${CO.tel}<br>${CO.mail}<br>tlinkcrm.com</div>`:''}</div></div>`}).join('')}</div><div class="row" style="margin-top:10px">${copyBtn('c-cards')}</div>`}
+$('#tabBody').innerHTML=h;$('#tabs').querySelectorAll('button').forEach(b=>b.setAttribute('aria-selected',b.dataset.t===tab))}
+$('#tabs').addEventListener('click',e=>{const t=e.target.dataset.t;if(t){tab=t;drawTab()}});
+$('#tabBody').addEventListener('click',async e=>{const id=e.target.dataset.copy;if(!id)return;
+const txt=id==='c-cards'?(result.cards||[]).map((c,i)=>`[${i+1}장] ${c.stat?c.stat+' '+(c.statLabel||'')+'\n':''}${c.head}\n${(Array.isArray(c.body)?c.body:[c.body||c.sub||'']).join('\n')}`).join('\n\n'):document.getElementById(id).innerText;
+try{await navigator.clipboard.writeText(txt);e.target.textContent='복사됨'}catch(x){e.target.textContent='직접 선택해 복사하세요'}setTimeout(()=>e.target.textContent='복사',1600)});
+
+function render(r,l){result=r;r._l=l;const P=r.profile||{},c=r.config||{};
+r._q=quote({ivr:!!c.ivr,cb:!!c.callback,type:['A','B','C'].includes(c.type)?c.type:'',agents:+c.agents||0,report:!!c.report,mobile:+c.mobileUsers||0});
+r._t=nextMoment(P.sector&&SECT.includes(P.sector)?P.sector:l.sector,now);
+$('#prof').innerHTML=`<div><div class="big">${esc(P.priority||'-')}</div><p style="margin:8px 0 0"><b>${esc(l.company||P.company)}</b></p><span class="tag">${esc(P.sector||l.sector)}</span><span class="tag">${esc(P.size)}</span><span class="tag on">${esc([l.form&&'상담신청',l.call&&'통화',l.photos?.length&&'사무실 사진'].filter(Boolean).join('+'))}</span></div>
+<div><p style="margin:0 0 6px">${esc(P.summary)}</p>${(P.quotes||[]).slice(0,3).map(q=>`<div class="quote">“${esc(q)}”</div>`).join('')}<p class="hint">다음 행동: ${esc(P.next)}</p></div>`;
+$('#sols').innerHTML=(r.solutions||[]).map(s=>`<div class="sol"><span class="tag ${s.fit==='핵심'?'on':''}">${esc(s.fit)}</span><div><b>${esc(s.name)}</b><div class="hint">${esc(s.why)}</div></div></div>`).join('');
+const own=quote(l.calc);
+$('#quote').innerHTML=quoteTable(r._q,'AI 추천 구성')+(c.note?`<p class="hint">${esc(c.note)}</p>`:'')+(own?`<div style="margin-top:16px">${quoteTable(own,'고객이 계산기로 고른 구성')}</div>`:'')+`<p class="note">티링크 온·IT/네트워크는 규모·통신사별 별도 견적입니다.</p>`;
+const I=r.install||{};
+$('#install').innerHTML=`<div class="prof"><div><div class="big" style="font-size:30px">${esc(I.type||'-')}</div><p class="note" style="margin-top:8px">${l.photos?.length?`고객 사무실 사진 ${l.photos.length}장 분석`:'사진 없이 신청 내용으로 추정'}</p></div><div><p style="margin:0 0 6px">${esc(I.why)}</p>${(I.check||[]).length?`<p class="hint">현장에서 확인할 것: ${esc((I.check||[]).join(' · '))}</p>`:''}</div></div>`;
+$('#tl').innerHTML=`<div class="st"><div class="when">${esc(l.when)}</div><p style="margin:6px 0 0">${l.form?'상담신청 접수':'문의 전화 종료'}</p></div>
+<div class="st"><div class="when">+1분</div><p style="margin:6px 0 0">맞춤 문자 + 같은 업종 현장 사진${l.photos?.length?'':' + 사무실 사진 요청'}</p></div>
+<div class="st"><div class="when">상담 전화 때</div><p style="margin:6px 0 0">현장 사진·하루 비용을 담은 1장 제안서</p></div>
+<div class="st"><div class="when">${r._t?md(r._t.send):'-'}</div><p style="margin:6px 0 0">재연락 제안일 (예측)</p><p class="hint">${esc(r._t?.label||'')}이 ${r._t?md(r._t.start):''}부터 시작될 것으로 보여, 2주 전 재연락을 권합니다.</p></div></div>`;
+$('#pains').innerHTML=(r.pains||[]).slice(0,3).map((p,i)=>`<div class="pain"><div class="k">${i+1}</div><h3 style="margin-top:10px">${esc(p.title)}</h3><p style="margin:0 0 8px">${esc(p.why)}</p><span class="tag">근거: ${esc(p.source)}</span></div>`).join('');
+const recs=(r.photos||[]).map(x=>({x,p:photoById(x.id)})).filter(o=>o.p);
+$('#recs').innerHTML=recs.length?recs.map(({x,p})=>`<div class="ph">${tile(p)}<div class="meta"><b>${esc(p.name)}</b> <span class="tag">${esc(p.sector)}</span><p style="margin:4px 0 0">${esc(x.reason)}</p></div></div>`).join(''):'<p class="hint">사진 DB에 맞는 사진이 없습니다.</p>';
+tab='sms';drawTab();$('#results').hidden=false;$('#results').scrollIntoView({behavior:'smooth'})}
+
+$('#run').addEventListener('click',async()=>{
+if(!sample){$('#runStatus').textContent='이 화면에서는 AI를 호출할 수 없습니다. claude.ai에서 페이지를 열어 주세요.';return}
+const l=lead();if(!l){$('#runStatus').textContent='먼저 상담 DB 엑셀을 불러오고 접수를 고르세요.';return}if(!l.msg.trim()&&!l.call.trim()){$('#runStatus').textContent='문의 내용이나 통화 녹취가 필요합니다.';return}
+if(!imgMax){const lim=await sample.limits().catch(()=>null);imgMax=lim?.images?.maxCount||0}
+const sent=(l.photos||[]).length;const t=nextMoment(l.sector,now);const imgs=(l.photos||[]).slice(0,Math.max(0,Math.min(imgMax,4)));
+const prompt=`너는 B2B 통신·AI 녹취 기업 '티링크'(tlinkcrm.com, 대표번호 1877-3836)의 영업·마케팅 담당자를 돕는다. 들어온 상담 접수 하나를 분석해, 이 고객에게만 맞춘 제안과 홍보물을 만든다.
+
+[티링크 솔루션 지식베이스 — 제품 설명은 이 안의 사실만 쓴다]
+${KB.map(k=>`■ ${k.name}: ${k.one}\n 기능: ${k.feat.join(' / ')}\n 근거: ${k.proof.join(' / ')}\n 잘 맞는 고객: ${k.fit}\n 가격: ${k.price}`).join('\n')}
+
+[녹취 서버 설치 형태]
+${INSTALL.map(i=>`- ${i.t}: ${i.d} (적합: ${i.fit})`).join('\n')}
+- 사례: ${INSTALL_CASE}
+
+[상담 접수]
+경로: ${[l.form&&'홈페이지 상담신청',l.call&&'전화 문의(AI 녹취)'].filter(Boolean).join(' + ')}
+회사명: ${l.company||'(미기재)'} / 담당자: ${l.person||'-'} / 분야: ${l.sector}
+관심 솔루션: ${[l.sol1,l.sol2].filter(Boolean).join(', ')||'(선택 없음)'}
+간편 견적 계산기 선택: ${calcText(l.calc)}
+문의 내용: ${l.msg||'(없음)'}
+통화 녹취: ${l.call?'\n'+l.call.slice(0,5000):'(없음)'}
+고객이 보낸 사무실 사진: ${imgs.length?imgs.length+'장 첨부(이미지를 직접 보고 판단)':sent?sent+'장 받음(이미지 분석 불가, 내용으로 추정)':'없음'}
+${sent?'※ 고객이 이미 사무실 사진을 보냈다. 어떤 발송물에도 사진을 보내 달라는 문장을 쓰지 않는다. 대신 "보내 주신 사진을 보니 ~ 형태로 설치할 수 있습니다"처럼 사진을 보고 판단한 설치 형태와, 방문 없이도 예상 비용을 바로 안내할 수 있다는 점을 제안으로 쓴다.':'※ 고객이 아직 사무실 사진을 보내지 않았다.'}
+
+[설치 현장 사진 DB]
+${catalog.map(p=>`${p.id}: 분야=${p.sector}${p.install?' / 설치='+p.install:''}${p.desc?' / '+p.desc:''}`).join('\n')||'(없음)'}
+
+[이 분야의 다음 전화 폭주 시기]
+${t?`${t.label} (${iso(t.start)} 시작) → 후속 메일 발송일 ${iso(t.send)}`:'없음'}
+
+할 일:
+1. profile: sector(${SECT.join(', ')} 중 하나), size(상담원·직원·전화기 수 등 말한 것만), priority(P1: 예산·도입 시점 언급, P2: 관심 높음, P3: 정보 수집), summary 1~2문장, quotes(신청서·통화에서 고객이 한 말 그대로 2~3개), next(담당자 다음 행동).
+2. solutions: 6개 솔루션 중 맞는 것 2~3개. fit은 '핵심' 또는 '추가 제안', why는 고객 말과 연결한 한 문장. 고객이 고른 관심 솔루션이 안 맞으면 그 이유도 why에 쓴다.
+3. config: 추천 구성. ivr(bool), callback(bool), type("A"|"B"|"C"|"없음"), agents(숫자), report(bool, A타입일 때만), mobileUsers(숫자, 모바일이 필요할 때), note(티링크 온·네트워크 등 별도 견적 항목과 고객 계산기 선택과의 차이 한두 문장). 금액은 쓰지 않는다.
+4. install: type은 스탠드형/렉거치형/미러링스위치허브 중 하나(벽걸이 등 변형은 why에), why는 근거 1~2문장(사진이 있으면 사진에서 본 것), check는 현장에서 확인할 것 2~3개. 녹취가 필요 없는 고객이면 type을 "해당 없음"으로.
+5. pains: 고민 3가지, source는 '상담신청'·'통화'·'사무실 사진' 중 근거.
+6. photos: DB에서 이 고객과 같은 분야·비슷한 환경 사진 최대 3장(id만), reason 한 문장.
+[발송물 작성 원칙 — 소비자 심리]
+- 기능 설명 금지. 고객이 겪는 장면과 도입 후 달라지는 장면만 쓴다.
+- 거울 효과: 첫 문장은 고객이 실제로 한 말이나 그 상황을 그대로 비춘다.
+- 손실 회피: 지금 놓치고 있는 것(못 받은 전화, 기록 없는 분쟁, 시달리는 직원)을 구체적으로.
+- 사회적 증거: 같은 분야 설치 사례와 지식베이스의 수치(1,000여 기업, 성공률 99% 등)만 사용.
+- 실제 시간 압박만: 폭주 시기, 고객이 말한 예산·도입 시점. 가짜 한정·할인·마감 금지.
+- 행동 장벽 최소화: 요청하지 말고 고객이 얻는 혜택을 앞세워 제안한다("~보내 주시면 ~까지 안내해 드립니다").
+- 다른 고객사의 이름은 어디에도 쓰지 않는다. 사례는 분야로만 말한다.
+- 짧게: 한 문장 25자 안팎, 문어체 대신 말하듯이. 숫자는 자료에 있는 것만.
+7. sms: 접수 직후 보내는 고객 맞춤 MMS 광고(현장 사진 1장 첨부). greeting(회사명과 담당자 호칭 인사 + "티링크입니다", 40자 이내), hook(고객이 한 말을 비추며 공감하는 1~2문장, 60자 이내), product(추천 솔루션이 이 고객에게 해 주는 일 2~3개, 각 30자 이내, 결과 위주), case(첨부 사진의 같은 분야 설치 사례 설명. 고객사명은 절대 쓰지 말고 "같은 공공·복지 기관에"처럼 분야로만, 어떤 형태로 설치했는지, 50자 이내), cta(제안형 문장 1~2개. "~보내 주세요" 같은 요청형 금지. 사무실 사진이 없고 녹취 설치가 필요하면 "단자함 사진을 보내 주시면 맞는 설치 방법과 예상 비용까지 안내해 드립니다"처럼 받을 혜택을 앞세운 제안, 60자 이내). 회사 연락처는 쓰지 않는다.
+8. offer: 1장 제안서. greeting(회사명·담당자 호칭 인사, 30자 이내), hook(따옴표 안에 들어갈 고객의 말 또는 그 상황, 22자 이내), sub(그 고민을 해결한다는 한 줄, 30자 이내), loss(지금 잃고 있는 것, 40자 이내), after(도입 후 장면, 40자 이내), proof(지식베이스 근거 3개, 각 16자 이내), mail_subject(25자 이내, 호기심 또는 고객 말), mail_body(인사 → 고객 고민 공감 → 추천 솔루션과 같은 분야 사례 → 제안서 첨부 안내 → 다음 행동, 5~7줄. 서명·연락처는 쓰지 않음). 금액은 쓰지 않는다(화면이 계산해 넣음).
+
+9. cards: 이 분야 대상 SNS 카드뉴스 6장. 피드에서 손가락을 멈추게 하고 끝까지 넘기게 만드는 흐름. 순서대로 kind: hook(이 분야 담당자가 뜨끔할 질문이나 장면), pain(그 문제로 매일 잃는 것: 시간·고객·직원 마음을 장면으로), reframe(문제는 사람이 아니라 기록·연결이 없는 구조라는 관점 전환), solution(티링크로 바뀐 하루, 사진 배경), proof(지식베이스 수치와 같은 분야 설치 사례), cta(받을 혜택을 앞세운 쉬운 제안). 각 장: head 18자 이내, body는 2~3줄 배열(각 24자 이내, 구체적 장면·결과), 필요한 장(pain·proof)은 stat(자료에 있는 숫자만, 예 "99%")과 statLabel(10자 이내). 고객사명·실명은 쓰지 않는다.
+지식베이스·접수 내용에 없는 사실, 수치, 보장 표현은 만들지 않는다.
+
+JSON 하나만 출력:
+{"profile":{"sector":"","size":"","priority":"","summary":"","quotes":[],"next":""},"solutions":[{"name":"","fit":"","why":""}],"config":{"ivr":false,"callback":false,"type":"","agents":0,"report":false,"mobileUsers":0,"note":""},"install":{"type":"","why":"","check":[]},"pains":[{"title":"","why":"","source":""}],"photos":[{"id":"","reason":""}],"sms":{"greeting":"","hook":"","product":[],"case":"","cta":""},"offer":{"greeting":"","hook":"","sub":"","loss":"","after":"","proof":[],"mail_subject":"","mail_body":""},"cards":[{"kind":"hook","head":"","body":["",""],"stat":"","statLabel":""}]}`;
+running=new AbortController();$('#run').disabled=true;$('#stop').hidden=false;
+$('#runStatus').textContent='신청서·통화·사진을 함께 분석하는 중… (보통 30~90초)';
+try{const opts={signal:running.signal,cache:false,onText:({text})=>{$('#runStatus').textContent=`홍보물 작성 중… ${text.length}자`}};if(imgs.length)opts.images=imgs.map(p=>p.blob);
+const r=await sample.json(prompt,opts);render(r,l);if(sent&&!imgs.length)$('#runStatus').dataset.w='1';$('#runStatus').textContent=sent?(imgs.length?`완료. 고객 사무실 사진 ${imgs.length}장을 AI가 직접 보고 판단했습니다.`:'완료. 이 화면에서는 사진을 AI에 보낼 수 없어 신청·통화 내용으로 판단했습니다.'):'완료. 내용을 검토하고 복사해 쓰세요.'}
+catch(e){$('#runStatus').textContent=e.code==='cancelled'?'중지했습니다.':e.code==='not_granted'?'AI 사용이 허용되지 않았습니다.':e.code==='rate_limited'?'요청이 많습니다. 잠시 후 다시 눌러 주세요.':e.code==='invalid_json'?'결과 형식이 깨졌습니다. 한 번 더 눌러 주세요.':e.code==='image_rejected'||e.code==='images_unavailable'?'사무실 사진을 보낼 수 없습니다. 사진을 빼고 다시 시도하세요.':'생성에 실패했습니다. 다시 시도해 주세요.'}
+finally{$('#run').disabled=false;$('#stop').hidden=true}});
+$('#stop').addEventListener('click',()=>running?.abort());
+
+(async()=>{try{if(!window.claude?.use)return;sample=await window.claude.use('sample');if(!sample)return;const l=await sample.limits().catch(()=>null);imgMax=l?.images?.maxCount||0}catch(e){}})();
+}
+</script>
+</body>
+</html>
